@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Hero from "@/components/Hero";
 import Dashboard from "@/components/Dashboard";
-import ModelTraining from "@/components/ModelTraining";
+import ImageClassificationTraining from "@/components/ImageClassificationTraining";
 import BinVisualization from "@/components/BinVisualization";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -25,7 +25,7 @@ const Index = () => {
               value="training"
               className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
             >
-              ML Training
+              Image Classification
             </TabsTrigger>
             <TabsTrigger 
               value="visualization"
@@ -40,7 +40,7 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="training" className="animate-slide-up">
-            <ModelTraining />
+            <ImageClassificationTraining />
           </TabsContent>
 
           <TabsContent value="visualization" className="animate-slide-up">
