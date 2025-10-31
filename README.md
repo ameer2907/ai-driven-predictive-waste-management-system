@@ -1,11 +1,7 @@
 # 🌱 AI-Driven Predictive Waste Management System
 
-> **Leveraging IoT sensors and deep learning to optimize urban waste collection and enable intelligent recycling**
-
-[![Live Demo](https://img.shields.io/badge/demo-live-success)](https://lovable.dev/projects/1ed24eec-88ea-4228-9074-de1436f425a1)
-[![ML Accuracy](https://img.shields.io/badge/accuracy-93.2%25-blue)]()
-[![Hardware Cost](https://img.shields.io/badge/hardware-$25/unit-green)]()
-
+> **Leveraging IoT sensors and deep learning to optimize urban waste collection and enable intelligent recycling
+> 
 ## 🎯 Project Overview
 
 An AI-powered solution that combines **IoT sensors** with **machine learning** to revolutionize urban waste management. The system predicts when waste bins will fill and automatically classifies waste types, reducing collection costs by 30% while improving recycling efficiency.
@@ -180,10 +176,6 @@ Our system contributes to urban sustainability through:
 - **Prevented Overflows** - Predictive alerts prevent health hazards
 - **Optimized Resources** - Data-driven decisions reduce waste in waste management
 
-## 📱 Demo
-
-Visit the live demo: [https://lovable.dev/projects/1ed24eec-88ea-4228-9074-de1436f425a1](https://lovable.dev/projects/1ed24eec-88ea-4228-9074-de1436f425a1)
-
 ## 🔮 Future Enhancements
 
 - [ ] Edge AI inference on microcontrollers
@@ -193,20 +185,6 @@ Visit the live demo: [https://lovable.dev/projects/1ed24eec-88ea-4228-9074-de143
 - [ ] Multi-city scalability testing
 - [ ] Real-world pilot deployment
 
-## 📄 License
 
-This project is licensed under the MIT License.
-
-## 👥 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📧 Contact
-
-For questions, collaborations, or pilot deployment inquiries, please reach out.
-
----
-
-**Built with ❤️ for Urban Sustainability**
 
 🌱 Making cities cleaner, one smart bin at a time ♻️
