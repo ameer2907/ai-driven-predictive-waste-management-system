@@ -2,65 +2,62 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system - Dark Blue IoT Theme
-All colors MUST be HSL.
-*/
+/* Professional Dark Blue Theme - Balanced & Clean */
 
 @layer base {
   :root {
-    --background: 220 40% 6%;
-    --foreground: 210 20% 95%;
+    --background: 222 30% 8%;
+    --foreground: 210 20% 90%;
 
-    --card: 220 35% 10%;
-    --card-foreground: 210 20% 95%;
+    --card: 222 28% 11%;
+    --card-foreground: 210 20% 90%;
 
-    --popover: 220 40% 8%;
-    --popover-foreground: 210 20% 95%;
+    --popover: 222 28% 11%;
+    --popover-foreground: 210 20% 90%;
 
-    --primary: 200 85% 50%;
-    --primary-foreground: 220 40% 6%;
-    --primary-glow: 200 100% 60%;
+    --primary: 205 65% 55%;
+    --primary-foreground: 222 30% 8%;
+    --primary-glow: 205 70% 60%;
 
-    --secondary: 170 70% 45%;
-    --secondary-foreground: 220 40% 6%;
-    --secondary-glow: 170 90% 55%;
+    --secondary: 180 40% 45%;
+    --secondary-foreground: 222 30% 8%;
+    --secondary-glow: 180 50% 50%;
 
-    --muted: 220 30% 15%;
-    --muted-foreground: 210 15% 60%;
+    --muted: 222 20% 18%;
+    --muted-foreground: 215 15% 55%;
 
-    --accent: 260 70% 60%;
-    --accent-foreground: 210 20% 95%;
+    --accent: 250 40% 50%;
+    --accent-foreground: 210 20% 90%;
 
-    --destructive: 0 75% 55%;
-    --destructive-foreground: 210 20% 95%;
+    --destructive: 0 50% 50%;
+    --destructive-foreground: 210 20% 90%;
 
-    --success: 150 70% 45%;
-    --warning: 45 95% 55%;
-    --info: 200 85% 55%;
+    --success: 155 45% 42%;
+    --warning: 40 60% 50%;
+    --info: 205 60% 55%;
 
-    --border: 220 30% 20%;
-    --input: 220 30% 14%;
-    --ring: 200 85% 50%;
+    --border: 222 18% 18%;
+    --input: 222 20% 14%;
+    --ring: 205 65% 55%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
-    --gradient-primary: linear-gradient(135deg, hsl(200 85% 50%), hsl(200 100% 60%));
-    --gradient-secondary: linear-gradient(135deg, hsl(170 70% 45%), hsl(170 90% 55%));
-    --gradient-accent: linear-gradient(135deg, hsl(260 70% 60%), hsl(300 80% 60%));
-    --gradient-hero: linear-gradient(135deg, hsl(200 85% 50%) 0%, hsl(170 70% 45%) 40%, hsl(260 70% 60%) 100%);
-    --gradient-dark-blue: linear-gradient(180deg, hsl(220 45% 8%) 0%, hsl(220 40% 4%) 100%);
-    --gradient-mesh: radial-gradient(ellipse at 20% 20%, hsl(200 85% 50% / 0.15) 0px, transparent 50%),
-                     radial-gradient(ellipse at 80% 80%, hsl(170 70% 45% / 0.12) 0px, transparent 50%),
-                     radial-gradient(ellipse at 50% 50%, hsl(260 70% 60% / 0.08) 0px, transparent 60%),
-                     radial-gradient(ellipse at 90% 20%, hsl(200 100% 60% / 0.1) 0px, transparent 40%);
+    --gradient-primary: linear-gradient(135deg, hsl(205 65% 55%), hsl(205 70% 60%));
+    --gradient-secondary: linear-gradient(135deg, hsl(180 40% 45%), hsl(180 50% 50%));
+    --gradient-accent: linear-gradient(135deg, hsl(250 40% 50%), hsl(280 45% 55%));
+    --gradient-hero: linear-gradient(135deg, hsl(205 65% 55%) 0%, hsl(180 40% 45%) 50%, hsl(205 70% 60%) 100%);
+    --gradient-dark-blue: linear-gradient(180deg, hsl(222 32% 9%) 0%, hsl(222 35% 5%) 100%);
+    --gradient-mesh: radial-gradient(ellipse at 20% 20%, hsl(205 65% 55% / 0.08) 0px, transparent 50%),
+                     radial-gradient(ellipse at 80% 80%, hsl(180 40% 45% / 0.06) 0px, transparent 50%),
+                     radial-gradient(ellipse at 50% 50%, hsl(250 40% 50% / 0.04) 0px, transparent 60%);
 
-    --shadow-glow: 0 0 50px hsl(200 100% 60% / 0.35);
-    --shadow-glow-secondary: 0 0 50px hsl(170 90% 55% / 0.35);
-    --shadow-elevated: 0 25px 80px -15px hsl(220 40% 4% / 0.9);
-    --shadow-card: 0 8px 32px -8px hsl(200 85% 50% / 0.15);
+    --shadow-glow: 0 0 30px hsl(205 65% 55% / 0.2);
+    --shadow-glow-secondary: 0 0 30px hsl(180 50% 50% / 0.2);
+    --shadow-elevated: 0 20px 60px -15px hsl(222 35% 5% / 0.8);
+    --shadow-card: 0 4px 20px -4px hsl(205 65% 55% / 0.08);
 
-    --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-bounce: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 }
 
@@ -127,22 +124,22 @@ All colors MUST be HSL.
   }
 
   .glass-card {
-    @apply backdrop-blur-xl border;
-    background: linear-gradient(135deg, hsl(var(--card) / 0.6), hsl(var(--card) / 0.4));
-    border-color: hsl(var(--border) / 0.5);
+    @apply backdrop-blur-lg border;
+    background: linear-gradient(135deg, hsl(var(--card) / 0.8), hsl(var(--card) / 0.6));
+    border-color: hsl(var(--border) / 0.4);
     box-shadow: var(--shadow-card);
   }
 
   .glass-card:hover {
-    border-color: hsl(var(--primary) / 0.3);
+    border-color: hsl(var(--primary) / 0.25);
     box-shadow: var(--shadow-glow);
   }
 
   .neon-border {
     box-shadow: 
-      0 0 5px hsl(var(--primary) / 0.5),
-      0 0 20px hsl(var(--primary) / 0.3),
-      inset 0 0 20px hsl(var(--primary) / 0.1);
+      0 0 3px hsl(var(--primary) / 0.3),
+      0 0 10px hsl(var(--primary) / 0.15),
+      inset 0 0 10px hsl(var(--primary) / 0.05);
   }
 
   @keyframes float {

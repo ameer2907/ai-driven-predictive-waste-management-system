@@ -6,7 +6,7 @@ import { Cpu, Wifi, Battery, Thermometer, Ruler, RotateCcw, Zap, Signal, MapPin,
 
 const BinVisualization = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [rotation, setRotation] = useState({ x: 0.3, y: 0 });
+  const rotationRef = useRef({ x: 0.3, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
   const [fillLevel, setFillLevel] = useState(65);
@@ -17,6 +17,7 @@ const BinVisualization = () => {
   });
   const animationRef = useRef<number>();
   const timeRef = useRef(0);
+  const isDraggingRef = useRef(false);
 
   // Simulate live sensor updates
   useEffect(() => {
@@ -71,8 +72,8 @@ const BinVisualization = () => {
       ctx.save();
       ctx.translate(centerX, centerY);
 
-      const rotX = rotation.x;
-      const rotY = rotation.y;
+      const rotX = rotationRef.current.x;
+      const rotY = rotationRef.current.y;
 
       // 3D rotation function
       const rotate3D = (x: number, y: number, z: number) => {
@@ -308,11 +309,8 @@ const BinVisualization = () => {
       ctx.fillText(`RSSI: ${sensorData.signal}dBm`, 20, 70);
 
       // Auto-rotate
-      if (!isDragging) {
-        setRotation((prev) => ({
-          x: prev.x,
-          y: prev.y + 0.008,
-        }));
+      if (!isDraggingRef.current) {
+        rotationRef.current.y += 0.008;
       }
 
       animationRef.current = requestAnimationFrame(animate);
@@ -325,46 +323,49 @@ const BinVisualization = () => {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [rotation, isDragging, fillLevel, sensorData]);
+  }, [fillLevel, sensorData]);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    isDraggingRef.current = true;
     setIsDragging(true);
     setLastPos({ x: e.clientX, y: e.clientY });
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging) return;
+    if (!isDraggingRef.current) return;
     const deltaX = e.clientX - lastPos.x;
     const deltaY = e.clientY - lastPos.y;
-    setRotation((prev) => ({
-      x: Math.max(-0.5, Math.min(0.8, prev.x + deltaY * 0.01)),
-      y: prev.y + deltaX * 0.01,
-    }));
+    rotationRef.current = {
+      x: Math.max(-0.5, Math.min(0.8, rotationRef.current.x + deltaY * 0.01)),
+      y: rotationRef.current.y + deltaX * 0.01,
+    };
     setLastPos({ x: e.clientX, y: e.clientY });
   };
 
   const handleMouseUp = () => {
+    isDraggingRef.current = false;
     setIsDragging(false);
   };
 
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    isDraggingRef.current = true;
     setIsDragging(true);
     setLastPos({ x: e.touches[0].clientX, y: e.touches[0].clientY });
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDragging) return;
+    if (!isDraggingRef.current) return;
     const deltaX = e.touches[0].clientX - lastPos.x;
     const deltaY = e.touches[0].clientY - lastPos.y;
-    setRotation((prev) => ({
-      x: Math.max(-0.5, Math.min(0.8, prev.x + deltaY * 0.01)),
-      y: prev.y + deltaX * 0.01,
-    }));
+    rotationRef.current = {
+      x: Math.max(-0.5, Math.min(0.8, rotationRef.current.x + deltaY * 0.01)),
+      y: rotationRef.current.y + deltaX * 0.01,
+    };
     setLastPos({ x: e.touches[0].clientX, y: e.touches[0].clientY });
   };
 
   const resetRotation = () => {
-    setRotation({ x: 0.3, y: 0 });
+    rotationRef.current = { x: 0.3, y: 0 };
   };
 
   return (
@@ -494,17 +495,19 @@ const BinVisualization = () => {
                 </CardContent>
               </Card>
 
-              {/* Cost Card */}
-              <Card className="glass-card border-accent/40 overflow-hidden">
-                <div className="h-1 bg-gradient-to-r from-primary via-secondary to-accent" />
+              {/* System Status */}
+              <Card className="glass-card border-primary/30">
                 <CardContent className="pt-6">
                   <div className="text-center">
                     <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                      Total Hardware Cost
+                      System Status
                     </div>
-                    <div className="text-4xl font-bold text-gradient-hero">$25</div>
+                    <div className="text-xl font-bold text-primary flex items-center justify-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                      Online
+                    </div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      Per unit • Mass production ready
+                      All sensors operational
                     </div>
                   </div>
                 </CardContent>
