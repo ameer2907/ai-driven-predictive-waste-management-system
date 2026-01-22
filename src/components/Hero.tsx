@@ -29,16 +29,16 @@ const Hero = () => {
           </div>
         </div>
 
-        <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-center mb-6 animate-slide-up" style={{ animationDelay: "0.2s" }}>
-          <span className="text-gradient-hero">AI-Driven Predictive</span>
+        <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-center mb-6 animate-slide-up" style={{ animationDelay: "0.2s" }}>
+          <span className="text-gradient-hero">AI-Driven Predictive Waste Management</span>
           <br />
-          <span className="text-foreground">Waste Management</span>
+          <span className="text-foreground">for Urban Sustainability</span>
           <br />
-          <span className="text-gradient-primary">for Urban Sustainability</span>
+          <span className="text-primary font-semibold">USING IoT</span>
         </h1>
 
-        <p className="text-lg md:text-xl text-muted-foreground text-center max-w-4xl mx-auto mb-8 animate-slide-up" style={{ animationDelay: "0.4s" }}>
-          <span className="text-primary font-semibold">USING IoT</span> — Leveraging smart sensors, machine learning, and real-time analytics 
+        <p className="text-base md:text-lg text-muted-foreground text-center max-w-3xl mx-auto mb-8 animate-slide-up" style={{ animationDelay: "0.4s" }}>
+          Leveraging smart sensors, machine learning, and real-time analytics 
           to predict waste levels, optimize collection routes, and build sustainable smart cities
         </p>
 
@@ -58,22 +58,18 @@ const Hero = () => {
         </div>
 
         {/* Stats bar */}
-        <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto animate-slide-up" style={{ animationDelay: "0.8s" }}>
-          <div className="glass-card rounded-xl p-4 text-center">
-            <div className="text-2xl md:text-3xl font-bold text-primary">2,527</div>
+        <div className="mt-10 grid grid-cols-3 gap-4 max-w-2xl mx-auto animate-slide-up" style={{ animationDelay: "0.8s" }}>
+          <div className="glass-card rounded-xl p-4 text-center border border-border/30">
+            <div className="text-2xl font-bold text-primary">2,527</div>
             <div className="text-xs text-muted-foreground">Training Images</div>
           </div>
-          <div className="glass-card rounded-xl p-4 text-center">
-            <div className="text-2xl md:text-3xl font-bold text-secondary">6</div>
+          <div className="glass-card rounded-xl p-4 text-center border border-border/30">
+            <div className="text-2xl font-bold text-foreground">6</div>
             <div className="text-xs text-muted-foreground">Waste Categories</div>
           </div>
-          <div className="glass-card rounded-xl p-4 text-center">
-            <div className="text-2xl md:text-3xl font-bold text-success">93.2%</div>
+          <div className="glass-card rounded-xl p-4 text-center border border-border/30">
+            <div className="text-2xl font-bold text-primary">93.2%</div>
             <div className="text-xs text-muted-foreground">Model Accuracy</div>
-          </div>
-          <div className="glass-card rounded-xl p-4 text-center">
-            <div className="text-2xl md:text-3xl font-bold text-warning">$25</div>
-            <div className="text-xs text-muted-foreground">Per Unit Cost</div>
           </div>
         </div>
       </div>
