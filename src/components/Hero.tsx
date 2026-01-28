@@ -34,7 +34,7 @@ const Hero = () => {
           <br />
           <span className="text-foreground">for Urban Sustainability</span>
           <br />
-          <span className="text-primary font-semibold">USING IoT</span>
+          <span className="text-primary font-semibold">using IoT</span>
         </h1>
 
         <p className="text-base md:text-lg text-muted-foreground text-center max-w-3xl mx-auto mb-8 animate-slide-up" style={{ animationDelay: "0.4s" }}>
