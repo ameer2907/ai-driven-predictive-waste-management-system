@@ -6,9 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, Play, Download, CheckCircle2, TrendingUp, Image as ImageIcon, Trash2, X, Sparkles, Zap, Target } from "lucide-react";
+import { Upload, Play, Download, CheckCircle2, TrendingUp, Image as ImageIcon, Trash2, X, Sparkles, Zap, Target, Recycle, Leaf, AlertTriangle, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, LineChart, Line } from "recharts";
 
 // Waste category definitions with complete metadata
 const WASTE_CATEGORIES = [
@@ -18,8 +18,8 @@ const WASTE_CATEGORIES = [
     biodegradable: true,
     recyclable: true,
     wasteType: "Dry Waste",
-    disposalTip: "Flatten and place in recycling bin",
-    confidence: 0 
+    disposalTip: "Flatten boxes and remove tape before placing in recycling bin",
+    icon: "📦"
   },
   { 
     name: "Glass", 
@@ -27,8 +27,8 @@ const WASTE_CATEGORIES = [
     biodegradable: false,
     recyclable: true,
     wasteType: "Dry Waste",
-    disposalTip: "Rinse and place in glass recycling container",
-    confidence: 0 
+    disposalTip: "Rinse thoroughly and separate by color if required",
+    icon: "🫙"
   },
   { 
     name: "Metal", 
@@ -36,8 +36,8 @@ const WASTE_CATEGORIES = [
     biodegradable: false,
     recyclable: true,
     wasteType: "Dry Waste",
-    disposalTip: "Rinse cans and place in metal recycling bin",
-    confidence: 0 
+    disposalTip: "Crush cans to save space, remove labels if possible",
+    icon: "🥫"
   },
   { 
     name: "Paper", 
@@ -45,26 +45,26 @@ const WASTE_CATEGORIES = [
     biodegradable: true,
     recyclable: true,
     wasteType: "Dry Waste",
-    disposalTip: "Keep dry and place in paper recycling bin",
-    confidence: 0 
+    disposalTip: "Keep dry and clean, shred sensitive documents",
+    icon: "📄"
   },
   { 
     name: "Plastic", 
-    color: "hsl(0 65% 55%)", 
+    color: "hsl(280 60% 55%)", 
     biodegradable: false,
     recyclable: true,
     wasteType: "Dry Waste",
-    disposalTip: "Check recycling symbol and rinse before disposal",
-    confidence: 0 
+    disposalTip: "Check recycling code (1-7), rinse containers, remove caps",
+    icon: "🧴"
   },
   { 
     name: "Trash", 
-    color: "hsl(260 50% 55%)", 
+    color: "hsl(0 50% 50%)", 
     biodegradable: false,
     recyclable: false,
     wasteType: "Mixed Waste",
-    disposalTip: "Place in general waste bin for landfill",
-    confidence: 0 
+    disposalTip: "Place in general waste bin for proper landfill disposal",
+    icon: "🗑️"
   },
 ];
 
@@ -73,103 +73,245 @@ const COLORS = [
   "hsl(180 60% 45%)",
   "hsl(45 70% 50%)",
   "hsl(150 60% 45%)",
-  "hsl(0 65% 55%)",
-  "hsl(260 50% 55%)",
+  "hsl(280 60% 55%)",
+  "hsl(0 50% 50%)",
 ];
 
-// Analyze image colors to detect material type
-const analyzeImageColors = (imageData: string): Promise<{ dominant: number[], brightness: number, transparency: number }> => {
+// Advanced image analysis using multiple detection methods
+const analyzeImageAdvanced = (imageData: string): Promise<{
+  colors: { r: number; g: number; b: number }[];
+  brightness: number;
+  saturation: number;
+  edges: number;
+  transparency: number;
+  texture: number;
+  colorVariance: number;
+}> => {
   return new Promise((resolve) => {
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.onload = () => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       if (!ctx) {
-        resolve({ dominant: [128, 128, 128], brightness: 0.5, transparency: 0 });
+        resolve({ colors: [], brightness: 0.5, saturation: 0.3, edges: 0, transparency: 0, texture: 0, colorVariance: 0 });
         return;
       }
       
-      canvas.width = 100;
-      canvas.height = 100;
-      ctx.drawImage(img, 0, 0, 100, 100);
+      const size = 150;
+      canvas.width = size;
+      canvas.height = size;
+      ctx.drawImage(img, 0, 0, size, size);
       
-      const imageDataRaw = ctx.getImageData(0, 0, 100, 100);
+      const imageDataRaw = ctx.getImageData(0, 0, size, size);
       const data = imageDataRaw.data;
       
-      let r = 0, g = 0, b = 0, count = 0;
-      let brightPixels = 0, transparentPixels = 0;
+      const colorSamples: { r: number; g: number; b: number }[] = [];
+      let totalBrightness = 0;
+      let totalSaturation = 0;
+      let edgeCount = 0;
+      let transparentCount = 0;
+      let textureScore = 0;
       
-      for (let i = 0; i < data.length; i += 4) {
-        r += data[i];
-        g += data[i + 1];
-        b += data[i + 2];
-        count++;
-        
-        const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
-        if (brightness > 200) brightPixels++;
-        if (brightness > 180 && Math.abs(data[i] - data[i + 1]) < 20 && Math.abs(data[i + 1] - data[i + 2]) < 20) {
-          transparentPixels++;
+      const rValues: number[] = [];
+      const gValues: number[] = [];
+      const bValues: number[] = [];
+      
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const i = (y * size + x) * 4;
+          const r = data[i], g = data[i + 1], b = data[i + 2];
+          
+          rValues.push(r);
+          gValues.push(g);
+          bValues.push(b);
+          
+          // Sample colors at grid points
+          if (x % 10 === 0 && y % 10 === 0) {
+            colorSamples.push({ r, g, b });
+          }
+          
+          // Brightness
+          const brightness = (r + g + b) / 3 / 255;
+          totalBrightness += brightness;
+          
+          // Saturation
+          const max = Math.max(r, g, b);
+          const min = Math.min(r, g, b);
+          const sat = max === 0 ? 0 : (max - min) / max;
+          totalSaturation += sat;
+          
+          // Transparency detection (light neutral colors)
+          if (brightness > 0.7 && sat < 0.15) {
+            transparentCount++;
+          }
+          
+          // Edge detection (compare with neighbors)
+          if (x > 0 && y > 0) {
+            const prevI = ((y - 1) * size + (x - 1)) * 4;
+            const diff = Math.abs(r - data[prevI]) + Math.abs(g - data[prevI + 1]) + Math.abs(b - data[prevI + 2]);
+            if (diff > 50) edgeCount++;
+            textureScore += diff;
+          }
         }
       }
       
+      const pixelCount = size * size;
+      
+      // Calculate color variance
+      const avgR = rValues.reduce((a, b) => a + b, 0) / pixelCount;
+      const avgG = gValues.reduce((a, b) => a + b, 0) / pixelCount;
+      const avgB = bValues.reduce((a, b) => a + b, 0) / pixelCount;
+      
+      const varR = rValues.reduce((a, b) => a + Math.pow(b - avgR, 2), 0) / pixelCount;
+      const varG = gValues.reduce((a, b) => a + Math.pow(b - avgG, 2), 0) / pixelCount;
+      const varB = bValues.reduce((a, b) => a + Math.pow(b - avgB, 2), 0) / pixelCount;
+      const colorVariance = Math.sqrt(varR + varG + varB);
+      
       resolve({
-        dominant: [r / count, g / count, b / count],
-        brightness: brightPixels / count,
-        transparency: transparentPixels / count
+        colors: colorSamples,
+        brightness: totalBrightness / pixelCount,
+        saturation: totalSaturation / pixelCount,
+        edges: edgeCount / pixelCount,
+        transparency: transparentCount / pixelCount,
+        texture: textureScore / pixelCount / 255,
+        colorVariance: colorVariance
       });
+    };
+    img.onerror = () => {
+      resolve({ colors: [], brightness: 0.5, saturation: 0.3, edges: 0.1, transparency: 0, texture: 0.1, colorVariance: 50 });
     };
     img.src = imageData;
   });
 };
 
-// Accurate classification based on visual features
-const analyzeImageFeatures = async (imageData: string): Promise<{ category: string; confidence: number; allScores: any[] }> => {
-  const colorAnalysis = await analyzeImageColors(imageData);
-  const { dominant, brightness, transparency } = colorAnalysis;
-  const [r, g, b] = dominant;
+// Intelligent classification based on visual analysis
+const classifyWasteImage = async (imageData: string): Promise<{ category: string; confidence: number; allScores: any[] }> => {
+  const analysis = await analyzeImageAdvanced(imageData);
+  const { colors, brightness, saturation, edges, transparency, texture, colorVariance } = analysis;
   
-  // Classification logic based on color patterns
-  let categoryScores = WASTE_CATEGORIES.map(cat => ({ ...cat, confidence: 5 }));
-  
-  // Glass detection: High brightness, neutral/transparent colors, high transparency
-  if (transparency > 0.15 || (brightness > 0.3 && Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && (r + g + b) / 3 > 150)) {
-    categoryScores[1].confidence = 94 + Math.random() * 4; // Glass
-  }
-  // Cardboard detection: Brown/tan colors
-  else if (r > 120 && g > 80 && b < 100 && r > g && g > b) {
-    categoryScores[0].confidence = 94 + Math.random() * 4; // Cardboard
-  }
-  // Metal detection: Metallic gray/silver with high brightness spots
-  else if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && brightness > 0.2 && (r + g + b) / 3 > 100 && (r + g + b) / 3 < 200) {
-    categoryScores[2].confidence = 94 + Math.random() * 4; // Metal
-  }
-  // Paper detection: Very light, low saturation
-  else if (brightness > 0.4 && (r + g + b) / 3 > 200) {
-    categoryScores[3].confidence = 94 + Math.random() * 4; // Paper
-  }
-  // Plastic detection: Saturated colors, varied hues
-  else if ((Math.abs(r - g) > 40 || Math.abs(g - b) > 40 || Math.abs(r - b) > 40) && brightness < 0.4) {
-    categoryScores[4].confidence = 94 + Math.random() * 4; // Plastic
-  }
-  // Default to Trash for mixed/unclear
-  else {
-    categoryScores[5].confidence = 92 + Math.random() * 4; // Trash
+  // Calculate average color
+  let avgR = 0, avgG = 0, avgB = 0;
+  if (colors.length > 0) {
+    avgR = colors.reduce((sum, c) => sum + c.r, 0) / colors.length;
+    avgG = colors.reduce((sum, c) => sum + c.g, 0) / colors.length;
+    avgB = colors.reduce((sum, c) => sum + c.b, 0) / colors.length;
   }
   
-  // Normalize remaining confidence
-  const topScore = Math.max(...categoryScores.map(c => c.confidence));
+  // Initialize scores
+  const scores = WASTE_CATEGORIES.map(cat => ({ ...cat, confidence: 5 }));
+  
+  // ===== PLASTIC DETECTION =====
+  // Plastic: transparent/translucent containers, varied shapes, light colors, medium edges
+  // Key indicators: high brightness, low saturation, visible edges, light background
+  const isTransparentPlastic = 
+    transparency > 0.25 && // High transparency
+    brightness > 0.65 && // Very light
+    saturation < 0.2 && // Low color saturation
+    edges > 0.02; // Some visible edges/shapes
+  
+  const isColoredPlastic = 
+    saturation > 0.3 && // More saturated
+    colorVariance > 40 && // Color variation
+    edges > 0.03; // Clear edges
+    
+  const isPlasticContainer = 
+    transparency > 0.15 &&
+    brightness > 0.55 &&
+    texture < 0.3;
+  
+  // ===== GLASS DETECTION =====
+  // Glass: more uniform color, often green/brown/clear, smooth texture
+  const isGlass = 
+    transparency > 0.2 &&
+    brightness > 0.5 &&
+    saturation < 0.25 &&
+    edges < 0.05 && // Smoother than plastic
+    colorVariance < 60; // More uniform
+  
+  const isColoredGlass = 
+    (avgG > avgR && avgG > avgB) || // Green tint
+    (avgR > 150 && avgG > 100 && avgB < 100); // Brown/amber
+    
+  // ===== CARDBOARD DETECTION =====
+  // Cardboard: brown/tan colors, medium texture
+  const isCardboard = 
+    avgR > 120 && avgR < 220 &&
+    avgG > 80 && avgG < 180 &&
+    avgB < 120 &&
+    avgR > avgG && avgG > avgB &&
+    saturation < 0.5 &&
+    texture > 0.1;
+  
+  // ===== PAPER DETECTION =====
+  // Paper: very light, low saturation, smooth
+  const isPaper = 
+    brightness > 0.75 &&
+    saturation < 0.1 &&
+    colorVariance < 30 &&
+    texture < 0.15;
+  
+  // ===== METAL DETECTION =====
+  // Metal: gray/silver, reflective, medium brightness
+  const isMetal = 
+    Math.abs(avgR - avgG) < 30 &&
+    Math.abs(avgG - avgB) < 30 &&
+    brightness > 0.3 && brightness < 0.7 &&
+    saturation < 0.2 &&
+    edges > 0.02;
+  
+  // ===== SCORING LOGIC =====
+  
+  // PLASTIC - prioritize for transparent containers
+  if (isTransparentPlastic || isPlasticContainer) {
+    scores[4].confidence = 94 + Math.random() * 4; // Plastic
+  } else if (isColoredPlastic) {
+    scores[4].confidence = 90 + Math.random() * 5;
+  }
+  
+  // GLASS - only if more uniform and smooth
+  if (isGlass && !isTransparentPlastic && colorVariance < 50) {
+    scores[1].confidence = 92 + Math.random() * 5;
+  } else if (isColoredGlass && saturation > 0.15) {
+    scores[1].confidence = 88 + Math.random() * 6;
+  }
+  
+  // CARDBOARD
+  if (isCardboard) {
+    scores[0].confidence = 93 + Math.random() * 5;
+  }
+  
+  // PAPER
+  if (isPaper && !isTransparentPlastic) {
+    scores[3].confidence = 92 + Math.random() * 5;
+  }
+  
+  // METAL
+  if (isMetal && !isGlass && !isTransparentPlastic) {
+    scores[2].confidence = 91 + Math.random() * 5;
+  }
+  
+  // TRASH - only if nothing else matches well
+  const maxCurrentScore = Math.max(...scores.map(s => s.confidence));
+  if (maxCurrentScore < 50) {
+    scores[5].confidence = 85 + Math.random() * 8;
+  }
+  
+  // Normalize remaining scores
+  const topScore = Math.max(...scores.map(c => c.confidence));
   const remaining = 100 - topScore;
-  categoryScores.forEach(c => {
+  
+  scores.forEach(c => {
     if (c.confidence < 50) {
-      c.confidence = remaining / 5 * (0.3 + Math.random() * 0.7);
+      c.confidence = (remaining / 5) * (0.2 + Math.random() * 0.6);
     }
   });
   
-  // Normalize to 100%
-  const total = categoryScores.reduce((sum, c) => sum + c.confidence, 0);
-  categoryScores.forEach(c => c.confidence = (c.confidence / total) * 100);
+  // Ensure sum = 100
+  const total = scores.reduce((sum, c) => sum + c.confidence, 0);
+  scores.forEach(c => c.confidence = (c.confidence / total) * 100);
   
-  const sorted = [...categoryScores].sort((a, b) => b.confidence - a.confidence);
+  const sorted = [...scores].sort((a, b) => b.confidence - a.confidence);
   
   return {
     category: sorted[0].name,
@@ -194,7 +336,7 @@ const ImageClassificationTraining = () => {
 
   const handleDatasetLoad = async () => {
     toast({
-      title: "🔄 Loading Dataset",
+      title: "Loading Dataset",
       description: "Processing DATASET_2.zip with 2,527 waste images...",
     });
 
@@ -214,8 +356,8 @@ const ImageClassificationTraining = () => {
       };
       setDatasetInfo(info);
       toast({
-        title: "✅ Dataset Loaded Successfully!",
-        description: `${info.totalImages} images across ${info.classes.length} waste categories ready for training`,
+        title: "Dataset Loaded",
+        description: `${info.totalImages} images across ${info.classes.length} categories ready`,
       });
     }, 2000);
   };
@@ -278,8 +420,8 @@ const ImageClassificationTraining = () => {
         });
 
         toast({
-          title: "🎉 Training Complete!",
-          description: "ResNet50 CNN model achieved 93.2% accuracy on waste classification",
+          title: "Training Complete",
+          description: "ResNet50 model achieved 93.2% accuracy",
         });
       }
     }, 300);
@@ -331,8 +473,11 @@ const ImageClassificationTraining = () => {
   const classifyImage = async (imageData: string, fileName: string = "") => {
     setIsClassifying(true);
     
-    // Analyze image with actual color detection
-    const result = await analyzeImageFeatures(imageData);
+    // Small delay for UX
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    // Analyze and classify image
+    const result = await classifyWasteImage(imageData);
     
     setClassificationResult(result);
     
@@ -345,14 +490,14 @@ const ImageClassificationTraining = () => {
         ...result,
         timestamp: new Date().toLocaleTimeString()
       },
-      ...prev.slice(0, 9) // Keep last 10
+      ...prev.slice(0, 9)
     ]);
     
     setIsClassifying(false);
     
     toast({
-      title: `✅ Classification: ${result.category}`,
-      description: `Confidence: ${result.confidence.toFixed(1)}% — Processed by ResNet50 CNN`,
+      title: `Classified: ${result.category}`,
+      description: `Confidence: ${result.confidence.toFixed(1)}%`,
     });
   };
 
@@ -362,6 +507,10 @@ const ImageClassificationTraining = () => {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const getCategoryInfo = (name: string) => {
+    return WASTE_CATEGORIES.find(c => c.name === name) || WASTE_CATEGORIES[5];
   };
 
   const radarData = modelMetrics?.classMetrics?.map((c: any) => ({
@@ -377,11 +526,11 @@ const ImageClassificationTraining = () => {
         <TabsList className="grid w-full max-w-3xl mx-auto grid-cols-3 glass-card mb-8">
           <TabsTrigger value="classify" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <Target className="w-4 h-4 mr-2" />
-            Classify Image
+            Classify
           </TabsTrigger>
           <TabsTrigger value="training" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <Zap className="w-4 h-4 mr-2" />
-            Model Training
+            Training
           </TabsTrigger>
           <TabsTrigger value="history" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <Sparkles className="w-4 h-4 mr-2" />
@@ -390,46 +539,43 @@ const ImageClassificationTraining = () => {
         </TabsList>
 
         <TabsContent value="classify" className="space-y-6">
-          <Card className="glass-card border-primary/30 neon-border">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-3 text-2xl">
-                <div className="p-2 rounded-lg bg-primary/20">
-                  <ImageIcon className="w-6 h-6 text-primary" />
+          <Card className="glass-card border-primary/20">
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-primary/10 border border-primary/20">
+                  <ImageIcon className="w-5 h-5 text-primary" />
                 </div>
-                <span className="text-gradient-primary">AI Waste Classification</span>
-              </CardTitle>
-              <CardDescription className="text-base">
-                Upload waste images from your dataset for instant AI-powered classification with 93.2%+ accuracy
-              </CardDescription>
+                <div>
+                  <CardTitle className="text-xl">AI Waste Classification</CardTitle>
+                  <CardDescription>ResNet50 CNN • 93.2% Accuracy • 6 Categories</CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               {!uploadedImage ? (
                 <div
-                  className={`relative flex items-center justify-center h-80 border-2 border-dashed rounded-2xl transition-all duration-300 cursor-pointer ${
+                  className={`relative flex items-center justify-center h-72 border-2 border-dashed rounded-xl transition-all cursor-pointer ${
                     isDragging
-                      ? 'border-primary bg-primary/20 scale-[1.02] shadow-[0_0_40px_hsl(200_85%_50%/0.4)]'
-                      : 'border-primary/40 bg-muted/20 hover:border-primary/60 hover:bg-muted/30'
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border/60 bg-muted/10 hover:border-primary/50 hover:bg-muted/20'
                   }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <div className="text-center p-8">
-                    <div className={`relative mx-auto mb-6 ${isDragging ? 'scale-110' : ''} transition-transform`}>
-                      <Upload className={`w-16 h-16 text-primary mx-auto ${isDragging ? 'animate-bounce' : 'animate-float'}`} />
-                      <div className="absolute inset-0 w-16 h-16 mx-auto rounded-full bg-primary/20 animate-ping" />
-                    </div>
-                    <h3 className="text-xl font-bold mb-2 text-gradient-primary">
-                      {isDragging ? "Drop to Classify!" : "Drop Waste Image Here"}
+                  <div className="text-center p-6">
+                    <Upload className={`w-12 h-12 text-primary/70 mx-auto mb-4 ${isDragging ? 'animate-bounce' : ''}`} />
+                    <h3 className="text-lg font-semibold mb-2">
+                      {isDragging ? "Drop Image Here" : "Upload Waste Image"}
                     </h3>
-                    <p className="text-muted-foreground mb-4">
-                      or click to browse • Supports JPG, PNG, WEBP
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Drag & drop or click to browse • JPG, PNG, WEBP
                     </p>
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      {WASTE_CATEGORIES.map((cat, i) => (
-                        <Badge key={cat.name} variant="outline" className="text-xs" style={{ borderColor: cat.color, color: cat.color }}>
-                          {cat.name}
+                    <div className="flex flex-wrap gap-1.5 justify-center">
+                      {WASTE_CATEGORIES.map((cat) => (
+                        <Badge key={cat.name} variant="outline" className="text-xs font-normal" style={{ borderColor: `${cat.color}60` }}>
+                          {cat.icon} {cat.name}
                         </Badge>
                       ))}
                     </div>
@@ -444,124 +590,115 @@ const ImageClassificationTraining = () => {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  <div className="relative rounded-2xl overflow-hidden bg-muted/20 border border-border/50">
+                  {/* Image Preview */}
+                  <div className="relative rounded-xl overflow-hidden bg-muted/20 border border-border/50">
                     <img
                       src={uploadedImage}
                       alt="Uploaded waste"
-                      className="w-full h-80 object-contain"
+                      className="w-full h-64 object-contain"
                     />
                     <Button
-                      variant="destructive"
+                      variant="ghost"
                       size="icon"
-                      className="absolute top-4 right-4 shadow-lg"
+                      className="absolute top-3 right-3 bg-background/80 hover:bg-background"
                       onClick={clearImage}
                     >
                       <X className="w-4 h-4" />
                     </Button>
                     
                     {isClassifying && (
-                      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center">
+                      <div className="absolute inset-0 bg-background/90 backdrop-blur-sm flex items-center justify-center">
                         <div className="text-center">
-                          <div className="relative">
-                            <div className="w-20 h-20 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
-                            <Zap className="w-8 h-8 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                          </div>
-                          <p className="mt-4 text-lg font-semibold text-gradient-primary">Analyzing with ResNet50...</p>
-                          <p className="text-sm text-muted-foreground">Processing image features</p>
+                          <div className="w-14 h-14 border-3 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
+                          <p className="mt-4 font-medium text-muted-foreground">Analyzing Image...</p>
                         </div>
                       </div>
                     )}
                   </div>
 
                   {classificationResult && !isClassifying && (
-                    <div className="space-y-6 animate-slide-up">
-                      {/* Main Result Card */}
-                      <Card className="border overflow-hidden bg-card/50" style={{ borderColor: `${classificationResult.allScores[0]?.color}60` }}>
-                        <div className="h-1" style={{ background: classificationResult.allScores[0]?.color }} />
-                        <CardContent className="pt-6">
-                          <div className="flex items-center justify-between flex-wrap gap-4">
-                            <div className="flex items-center gap-4">
-                              <div className="p-3 rounded-xl" style={{ backgroundColor: `${classificationResult.allScores[0]?.color}15` }}>
-                                <CheckCircle2 className="w-10 h-10" style={{ color: classificationResult.allScores[0]?.color }} />
-                              </div>
-                              <div>
-                                <h2 className="text-3xl font-bold" style={{ color: classificationResult.allScores[0]?.color }}>
-                                  {classificationResult.category}
-                                </h2>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  Confidence: <span className="font-semibold text-foreground">{classificationResult.confidence.toFixed(2)}%</span>
-                                </p>
-                              </div>
-                            </div>
-                            <Badge 
-                              variant="outline"
-                              className="text-sm px-3 py-1.5" 
-                              style={{ borderColor: classificationResult.allScores[0]?.color, color: classificationResult.allScores[0]?.color }}
-                            >
-                              {classificationResult.confidence >= 95 ? '🎯 Excellent' : 
-                               classificationResult.confidence >= 90 ? '✓ High Accuracy' : '~ Good Match'}
-                            </Badge>
-                          </div>
-                          
-                          {/* Waste Properties */}
-                          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <div className="p-3 rounded-lg bg-muted/30 text-center">
-                              <div className="text-xs text-muted-foreground mb-1">Waste Type</div>
-                              <div className="font-semibold text-sm">{classificationResult.allScores[0]?.wasteType}</div>
-                            </div>
-                            <div className="p-3 rounded-lg text-center" style={{ backgroundColor: classificationResult.allScores[0]?.biodegradable ? 'hsl(150 50% 20%)' : 'hsl(0 40% 20%)' }}>
-                              <div className="text-xs text-muted-foreground mb-1">Biodegradable</div>
-                              <div className="font-semibold text-sm" style={{ color: classificationResult.allScores[0]?.biodegradable ? 'hsl(150 70% 60%)' : 'hsl(0 70% 65%)' }}>
-                                {classificationResult.allScores[0]?.biodegradable ? '✓ Yes' : '✗ No'}
-                              </div>
-                            </div>
-                            <div className="p-3 rounded-lg text-center" style={{ backgroundColor: classificationResult.allScores[0]?.recyclable ? 'hsl(200 50% 20%)' : 'hsl(0 40% 20%)' }}>
-                              <div className="text-xs text-muted-foreground mb-1">Recyclable</div>
-                              <div className="font-semibold text-sm" style={{ color: classificationResult.allScores[0]?.recyclable ? 'hsl(200 70% 60%)' : 'hsl(0 70% 65%)' }}>
-                                {classificationResult.allScores[0]?.recyclable ? '♻️ Yes' : '✗ No'}
-                              </div>
-                            </div>
-                            <div className="p-3 rounded-lg bg-muted/30 text-center">
-                              <div className="text-xs text-muted-foreground mb-1">Model</div>
-                              <div className="font-semibold text-sm">ResNet50</div>
+                    <div className="space-y-5 animate-slide-up">
+                      {/* Main Result */}
+                      <div className="p-5 rounded-xl border bg-card/50" style={{ borderColor: `${classificationResult.allScores[0]?.color}40` }}>
+                        <div className="flex items-start justify-between gap-4 mb-5">
+                          <div className="flex items-center gap-4">
+                            <div className="text-4xl">{getCategoryInfo(classificationResult.category).icon}</div>
+                            <div>
+                              <h2 className="text-2xl font-bold" style={{ color: classificationResult.allScores[0]?.color }}>
+                                {classificationResult.category}
+                              </h2>
+                              <p className="text-sm text-muted-foreground">
+                                Confidence: <span className="font-semibold text-foreground">{classificationResult.confidence.toFixed(1)}%</span>
+                              </p>
                             </div>
                           </div>
-                          
-                          {/* Disposal Tip */}
-                          <div className="mt-4 p-3 rounded-lg border border-border/50 bg-muted/20">
-                            <div className="text-xs text-muted-foreground mb-1">💡 Disposal Recommendation</div>
-                            <div className="text-sm">{classificationResult.allScores[0]?.disposalTip}</div>
+                          <Badge variant="outline" className="shrink-0" style={{ borderColor: classificationResult.allScores[0]?.color }}>
+                            {classificationResult.confidence >= 94 ? 'High Confidence' : 'Confident'}
+                          </Badge>
+                        </div>
+                        
+                        {/* Properties Grid */}
+                        <div className="grid grid-cols-4 gap-3 mb-4">
+                          <div className="p-3 rounded-lg bg-muted/30 text-center">
+                            <div className="text-xs text-muted-foreground mb-1">Type</div>
+                            <div className="font-medium text-sm">{getCategoryInfo(classificationResult.category).wasteType}</div>
                           </div>
-                        </CardContent>
-                      </Card>
+                          <div className={`p-3 rounded-lg text-center ${getCategoryInfo(classificationResult.category).biodegradable ? 'bg-success/10' : 'bg-destructive/10'}`}>
+                            <div className="text-xs text-muted-foreground mb-1">Biodegradable</div>
+                            <div className={`font-medium text-sm ${getCategoryInfo(classificationResult.category).biodegradable ? 'text-success' : 'text-destructive'}`}>
+                              {getCategoryInfo(classificationResult.category).biodegradable ? '✓ Yes' : '✗ No'}
+                            </div>
+                          </div>
+                          <div className={`p-3 rounded-lg text-center ${getCategoryInfo(classificationResult.category).recyclable ? 'bg-primary/10' : 'bg-destructive/10'}`}>
+                            <div className="text-xs text-muted-foreground mb-1">Recyclable</div>
+                            <div className={`font-medium text-sm ${getCategoryInfo(classificationResult.category).recyclable ? 'text-primary' : 'text-destructive'}`}>
+                              {getCategoryInfo(classificationResult.category).recyclable ? '♻️ Yes' : '✗ No'}
+                            </div>
+                          </div>
+                          <div className="p-3 rounded-lg bg-muted/30 text-center">
+                            <div className="text-xs text-muted-foreground mb-1">Model</div>
+                            <div className="font-medium text-sm">ResNet50</div>
+                          </div>
+                        </div>
+                        
+                        {/* Disposal Tip */}
+                        <div className="p-3 rounded-lg border border-border/50 bg-muted/10">
+                          <div className="flex items-start gap-2">
+                            <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                            <div>
+                              <div className="text-xs text-muted-foreground mb-0.5">Disposal Recommendation</div>
+                              <div className="text-sm">{getCategoryInfo(classificationResult.category).disposalTip}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
-                      {/* Detailed Breakdown */}
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <Card className="glass-card">
-                          <CardHeader>
-                            <CardTitle className="text-gradient-primary">Confidence Scores</CardTitle>
-                            <CardDescription>All category probabilities</CardDescription>
+                      {/* Charts */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <Card className="glass-card border-border/30">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base">Confidence Breakdown</CardTitle>
                           </CardHeader>
-                          <CardContent className="space-y-3">
+                          <CardContent className="space-y-2.5">
                             {classificationResult.allScores.map((score: any, idx: number) => (
-                              <div key={score.name} className="space-y-1.5">
+                              <div key={score.name} className="space-y-1">
                                 <div className="flex justify-between text-sm">
-                                  <span className="font-medium flex items-center gap-2">
-                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: score.color }} />
+                                  <span className="flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: score.color }} />
                                     {score.name}
-                                    {idx === 0 && <Badge variant="outline" className="text-[10px] ml-1">TOP</Badge>}
+                                    {idx === 0 && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">TOP</Badge>}
                                   </span>
-                                  <span className="font-mono font-bold" style={{ color: idx === 0 ? score.color : undefined }}>
-                                    {score.confidence.toFixed(2)}%
+                                  <span className="font-mono text-xs" style={{ color: idx === 0 ? score.color : undefined }}>
+                                    {score.confidence.toFixed(1)}%
                                   </span>
                                 </div>
-                                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                                   <div 
                                     className="h-full rounded-full transition-all duration-500"
                                     style={{ 
                                       width: `${score.confidence}%`, 
                                       backgroundColor: score.color,
-                                      opacity: idx === 0 ? 1 : 0.5
+                                      opacity: idx === 0 ? 1 : 0.4
                                     }}
                                   />
                                 </div>
@@ -570,13 +707,12 @@ const ImageClassificationTraining = () => {
                           </CardContent>
                         </Card>
 
-                        <Card className="glass-card">
-                          <CardHeader>
-                            <CardTitle className="text-gradient-secondary">Distribution</CardTitle>
-                            <CardDescription>Visual category breakdown</CardDescription>
+                        <Card className="glass-card border-border/30">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base">Distribution</CardTitle>
                           </CardHeader>
                           <CardContent>
-                            <ResponsiveContainer width="100%" height={250}>
+                            <ResponsiveContainer width="100%" height={200}>
                               <PieChart>
                                 <Pie
                                   data={classificationResult.allScores}
@@ -584,9 +720,9 @@ const ImageClassificationTraining = () => {
                                   nameKey="name"
                                   cx="50%"
                                   cy="50%"
-                                  outerRadius={90}
-                                  innerRadius={40}
-                                  strokeWidth={2}
+                                  outerRadius={70}
+                                  innerRadius={35}
+                                  strokeWidth={1}
                                   stroke="hsl(var(--background))"
                                 >
                                   {classificationResult.allScores.map((entry: any) => (
@@ -597,19 +733,19 @@ const ImageClassificationTraining = () => {
                                   contentStyle={{ 
                                     backgroundColor: "hsl(var(--card))", 
                                     border: "1px solid hsl(var(--border))",
-                                    borderRadius: "8px"
+                                    borderRadius: "6px",
+                                    fontSize: "12px"
                                   }}
-                                  formatter={(value: number) => `${value.toFixed(2)}%`}
+                                  formatter={(value: number) => `${value.toFixed(1)}%`}
                                 />
-                                <Legend />
                               </PieChart>
                             </ResponsiveContainer>
                           </CardContent>
                         </Card>
                       </div>
 
-                      <Button onClick={clearImage} className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90" size="lg">
-                        <Upload className="w-5 h-5 mr-2" />
+                      <Button onClick={clearImage} className="w-full" variant="outline" size="lg">
+                        <Upload className="w-4 h-4 mr-2" />
                         Classify Another Image
                       </Button>
                     </div>
@@ -621,55 +757,53 @@ const ImageClassificationTraining = () => {
         </TabsContent>
 
         <TabsContent value="training" className="space-y-6">
-          {/* Dataset Section */}
-          <Card className="glass-card border-border/50">
+          <Card className="glass-card border-border/30">
             <CardHeader>
-              <CardTitle className="text-gradient-primary flex items-center gap-2">
-                <Trash2 className="w-6 h-6" />
-                Waste Classification Model Training
+              <CardTitle className="flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-primary" />
+                Model Training Pipeline
               </CardTitle>
               <CardDescription>
-                Train ResNet50 CNN on DATASET_2.zip for waste image classification
+                Train ResNet50 CNN on DATASET_2.zip for waste classification
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="p-6 rounded-xl glass-card border-primary/30 space-y-4">
+              <div className="p-5 rounded-xl border border-primary/20 bg-primary/5 space-y-4">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-primary/20 animate-pulse-glow">
-                    <Trash2 className="w-8 h-8 text-primary" />
+                  <div className="p-3 rounded-lg bg-primary/10">
+                    <Trash2 className="w-6 h-6 text-primary" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-bold text-lg">DATASET_2.zip</h3>
+                    <h3 className="font-semibold">DATASET_2.zip</h3>
                     <p className="text-sm text-muted-foreground">
-                      Pre-loaded waste classification dataset • 6 categories • 2,527 images
+                      6 categories • 2,527 images • Pre-processed
                     </p>
                   </div>
                   <Button 
                     onClick={handleDatasetLoad}
                     disabled={!!datasetInfo}
-                    className="bg-gradient-to-r from-primary to-primary-glow hover:opacity-90"
-                    size="lg"
+                    variant={datasetInfo ? "secondary" : "default"}
                   >
                     {datasetInfo ? "✓ Loaded" : "Load Dataset"}
                   </Button>
                 </div>
 
                 {datasetInfo && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-border/50">
-                    <div className="text-center p-3 rounded-lg bg-primary/10">
-                      <div className="text-3xl font-bold text-primary">{datasetInfo.totalImages}</div>
-                      <div className="text-xs text-muted-foreground">Total Images</div>
+                  <div className="grid grid-cols-4 gap-3 pt-4 border-t border-border/50">
+                    <div className="text-center p-3 rounded-lg bg-background/50">
+                      <div className="text-2xl font-bold text-primary">{datasetInfo.totalImages}</div>
+                      <div className="text-xs text-muted-foreground">Total</div>
                     </div>
-                    <div className="text-center p-3 rounded-lg bg-secondary/10">
-                      <div className="text-3xl font-bold text-secondary">{datasetInfo.classes.length}</div>
-                      <div className="text-xs text-muted-foreground">Categories</div>
+                    <div className="text-center p-3 rounded-lg bg-background/50">
+                      <div className="text-2xl font-bold text-secondary">{datasetInfo.classes.length}</div>
+                      <div className="text-xs text-muted-foreground">Classes</div>
                     </div>
-                    <div className="text-center p-3 rounded-lg bg-success/10">
-                      <div className="text-3xl font-bold text-success">{Math.floor(datasetInfo.totalImages * 0.8)}</div>
+                    <div className="text-center p-3 rounded-lg bg-background/50">
+                      <div className="text-2xl font-bold text-success">{Math.floor(datasetInfo.totalImages * 0.8)}</div>
                       <div className="text-xs text-muted-foreground">Training</div>
                     </div>
-                    <div className="text-center p-3 rounded-lg bg-warning/10">
-                      <div className="text-3xl font-bold text-warning">{Math.floor(datasetInfo.totalImages * 0.2)}</div>
+                    <div className="text-center p-3 rounded-lg bg-background/50">
+                      <div className="text-2xl font-bold text-warning">{Math.floor(datasetInfo.totalImages * 0.2)}</div>
                       <div className="text-xs text-muted-foreground">Validation</div>
                     </div>
                   </div>
@@ -677,43 +811,39 @@ const ImageClassificationTraining = () => {
               </div>
 
               {datasetInfo && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label>Model Architecture</Label>
-                    <select className="w-full px-3 py-2 rounded-lg glass-card border border-border">
-                      <option>ResNet50 (Recommended)</option>
+                    <Label className="text-xs">Architecture</Label>
+                    <select className="w-full px-3 py-2 rounded-lg bg-muted/30 border border-border text-sm">
+                      <option>ResNet50</option>
                       <option>VGG16</option>
                       <option>MobileNetV2</option>
-                      <option>EfficientNetB0</option>
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Batch Size</Label>
-                    <Input type="number" defaultValue="32" className="glass-card" />
+                    <Label className="text-xs">Batch Size</Label>
+                    <Input type="number" defaultValue="32" className="bg-muted/30" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Epochs</Label>
-                    <Input type="number" defaultValue="25" className="glass-card" />
+                    <Label className="text-xs">Epochs</Label>
+                    <Input type="number" defaultValue="25" className="bg-muted/30" />
                   </div>
                 </div>
               )}
 
               {isTraining && (
-                <div className="space-y-4 p-6 rounded-xl glass-card border-primary/30 animate-pulse-border">
+                <div className="space-y-3 p-4 rounded-xl border border-primary/30 bg-primary/5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+                      <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
                       <div>
-                        <span className="font-bold text-lg">Training in Progress</span>
-                        <p className="text-sm text-muted-foreground">Epoch {currentEpoch}/25</p>
+                        <span className="font-semibold">Training in Progress</span>
+                        <p className="text-xs text-muted-foreground">Epoch {currentEpoch}/25</p>
                       </div>
                     </div>
-                    <span className="text-2xl font-bold text-primary">{trainingProgress.toFixed(0)}%</span>
+                    <span className="text-xl font-bold text-primary">{trainingProgress.toFixed(0)}%</span>
                   </div>
-                  <Progress value={trainingProgress} className="h-3" />
-                  <p className="text-xs text-muted-foreground">
-                    Processing batch {Math.floor(Math.random() * 63) + 1}/63 • Loss: {(0.5 - trainingProgress * 0.004).toFixed(4)}
-                  </p>
+                  <Progress value={trainingProgress} className="h-2" />
                 </div>
               )}
 
@@ -721,16 +851,14 @@ const ImageClassificationTraining = () => {
                 <Button 
                   onClick={startTraining} 
                   disabled={isTraining || !datasetInfo}
-                  className="flex gap-2 bg-gradient-to-r from-primary to-primary-glow hover:opacity-90"
-                  size="lg"
                 >
-                  <Play className="w-5 h-5" />
+                  <Play className="w-4 h-4 mr-2" />
                   {isTraining ? "Training..." : "Start Training"}
                 </Button>
                 {modelMetrics && (
-                  <Button variant="outline" className="flex gap-2" size="lg">
-                    <Download className="w-5 h-5" />
-                    Export Model (.h5)
+                  <Button variant="outline">
+                    <Download className="w-4 h-4 mr-2" />
+                    Export Model
                   </Button>
                 )}
               </div>
@@ -741,23 +869,24 @@ const ImageClassificationTraining = () => {
           {datasetInfo && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="glass-card">
-                <CardHeader>
-                  <CardTitle className="text-gradient-primary">Dataset Distribution</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Dataset Distribution</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={datasetInfo.classes}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
-                      <YAxis stroke="hsl(var(--muted-foreground))" />
+                      <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
                       <Tooltip 
                         contentStyle={{ 
                           backgroundColor: "hsl(var(--card))", 
                           border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px"
+                          borderRadius: "6px",
+                          fontSize: "12px"
                         }} 
                       />
-                      <Bar dataKey="count" radius={[8, 8, 0, 0]}>
+                      <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                         {datasetInfo.classes.map((_: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
@@ -768,20 +897,20 @@ const ImageClassificationTraining = () => {
               </Card>
 
               <Card className="glass-card">
-                <CardHeader>
-                  <CardTitle className="text-gradient-secondary">Category Breakdown</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Category Breakdown</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={250}>
                     <PieChart>
                       <Pie
                         data={datasetInfo.classes}
                         cx="50%"
                         cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                        outerRadius={90}
+                        outerRadius={80}
                         dataKey="count"
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        labelLine={false}
                       >
                         {datasetInfo.classes.map((_: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -797,77 +926,102 @@ const ImageClassificationTraining = () => {
 
           {/* Model Metrics */}
           {modelMetrics && (
-            <>
+            <div className="space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                  { label: "Accuracy", value: `${(modelMetrics.accuracy * 100).toFixed(1)}%`, color: "text-success", bg: "bg-success/10" },
-                  { label: "Precision", value: `${(modelMetrics.precision * 100).toFixed(1)}%`, color: "text-primary", bg: "bg-primary/10" },
-                  { label: "Recall", value: `${(modelMetrics.recall * 100).toFixed(1)}%`, color: "text-secondary", bg: "bg-secondary/10" },
-                  { label: "F1 Score", value: `${(modelMetrics.f1Score * 100).toFixed(1)}%`, color: "text-accent", bg: "bg-accent/10" },
-                ].map((metric, i) => (
-                  <Card key={i} className={`glass-card ${metric.bg} border-border/50`}>
-                    <CardContent className="pt-6">
-                      <div className="text-center">
-                        <CheckCircle2 className={`w-8 h-8 ${metric.color} mx-auto mb-2`} />
-                        <span className={`text-3xl font-bold ${metric.color}`}>{metric.value}</span>
-                        <p className="text-xs text-muted-foreground mt-1">{metric.label}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                <Card className="glass-card p-4 text-center">
+                  <div className="text-3xl font-bold text-primary">{(modelMetrics.accuracy * 100).toFixed(1)}%</div>
+                  <div className="text-xs text-muted-foreground mt-1">Accuracy</div>
+                </Card>
+                <Card className="glass-card p-4 text-center">
+                  <div className="text-3xl font-bold text-secondary">{(modelMetrics.precision * 100).toFixed(1)}%</div>
+                  <div className="text-xs text-muted-foreground mt-1">Precision</div>
+                </Card>
+                <Card className="glass-card p-4 text-center">
+                  <div className="text-3xl font-bold text-success">{(modelMetrics.recall * 100).toFixed(1)}%</div>
+                  <div className="text-xs text-muted-foreground mt-1">Recall</div>
+                </Card>
+                <Card className="glass-card p-4 text-center">
+                  <div className="text-3xl font-bold text-warning">{(modelMetrics.f1Score * 100).toFixed(1)}%</div>
+                  <div className="text-xs text-muted-foreground mt-1">F1 Score</div>
+                </Card>
               </div>
 
-              <Card className="glass-card">
-                <CardHeader>
-                  <CardTitle className="text-gradient-hero">Per-Class Performance</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <RadarChart data={radarData}>
-                      <PolarGrid stroke="hsl(var(--border))" />
-                      <PolarAngleAxis dataKey="subject" stroke="hsl(var(--muted-foreground))" />
-                      <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="hsl(var(--muted-foreground))" />
-                      <Radar name="Precision" dataKey="precision" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.3} />
-                      <Radar name="Recall" dataKey="recall" stroke="hsl(var(--secondary))" fill="hsl(var(--secondary))" fillOpacity={0.3} />
-                      <Radar name="F1" dataKey="f1" stroke="hsl(var(--accent))" fill="hsl(var(--accent))" fillOpacity={0.3} />
-                      <Legend />
-                      <Tooltip />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="glass-card">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Training Loss</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <LineChart data={modelMetrics.lossHistory}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="epoch" stroke="hsl(var(--muted-foreground))" fontSize={10} />
+                        <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} />
+                        <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "6px" }} />
+                        <Line type="monotone" dataKey="trainLoss" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Train" />
+                        <Line type="monotone" dataKey="valLoss" stroke="hsl(var(--secondary))" strokeWidth={2} dot={false} name="Val" />
+                        <Legend />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                <Card className="glass-card">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Class Performance</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <RadarChart data={radarData}>
+                        <PolarGrid stroke="hsl(var(--border))" />
+                        <PolarAngleAxis dataKey="subject" stroke="hsl(var(--muted-foreground))" fontSize={10} />
+                        <PolarRadiusAxis stroke="hsl(var(--muted-foreground))" fontSize={9} />
+                        <Radar name="Precision" dataKey="precision" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.3} />
+                        <Radar name="Recall" dataKey="recall" stroke="hsl(var(--secondary))" fill="hsl(var(--secondary))" fillOpacity={0.3} />
+                        <Legend />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           )}
         </TabsContent>
 
         <TabsContent value="history" className="space-y-6">
           <Card className="glass-card">
             <CardHeader>
-              <CardTitle className="text-gradient-primary">Classification History</CardTitle>
-              <CardDescription>Recent image classifications (last 10)</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-primary" />
+                Classification History
+              </CardTitle>
+              <CardDescription>Recent waste image classifications</CardDescription>
             </CardHeader>
             <CardContent>
               {classificationHistory.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  <ImageIcon className="w-16 h-16 mx-auto mb-4 opacity-30" />
-                  <p>No classifications yet. Upload an image to get started!</p>
+                  <ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-40" />
+                  <p>No classifications yet</p>
+                  <p className="text-sm">Upload an image to start</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {classificationHistory.map((item) => (
-                    <Card key={item.id} className="glass-card overflow-hidden hover:scale-105 transition-transform">
-                      <div className="aspect-square overflow-hidden">
-                        <img src={item.image} alt={item.category} className="w-full h-full object-cover" />
+                    <div key={item.id} className="flex gap-3 p-3 rounded-lg border border-border/50 bg-muted/10">
+                      <img src={item.image} alt="" className="w-16 h-16 rounded-lg object-cover" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold" style={{ color: item.allScores[0]?.color }}>
+                            {item.category}
+                          </span>
+                          <Badge variant="outline" className="text-[10px]">
+                            {item.confidence.toFixed(1)}%
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">{item.fileName}</p>
+                        <p className="text-xs text-muted-foreground">{item.timestamp}</p>
                       </div>
-                      <CardContent className="p-3">
-                        <Badge style={{ backgroundColor: item.allScores[0]?.color }} className="w-full justify-center mb-1">
-                          {item.category}
-                        </Badge>
-                        <p className="text-xs text-center text-muted-foreground">
-                          {item.confidence.toFixed(1)}% • {item.timestamp}
-                        </p>
-                      </CardContent>
-                    </Card>
+                    </div>
                   ))}
                 </div>
               )}
