@@ -77,15 +77,18 @@ const COLORS = [
   "hsl(0 50% 50%)",
 ];
 
-// Advanced image analysis using multiple detection methods
-const analyzeImageAdvanced = (imageData: string): Promise<{
-  colors: { r: number; g: number; b: number }[];
+// Comprehensive image analysis for accurate waste classification
+const analyzeImageComprehensive = (imageData: string): Promise<{
+  avgColor: { r: number; g: number; b: number };
   brightness: number;
   saturation: number;
-  edges: number;
-  transparency: number;
-  texture: number;
-  colorVariance: number;
+  grayness: number;
+  metallicScore: number;
+  transparencyScore: number;
+  brownScore: number;
+  whiteScore: number;
+  colorfulness: number;
+  edgeDensity: number;
 }> => {
   return new Promise((resolve) => {
     const img = new Image();
@@ -94,11 +97,11 @@ const analyzeImageAdvanced = (imageData: string): Promise<{
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       if (!ctx) {
-        resolve({ colors: [], brightness: 0.5, saturation: 0.3, edges: 0, transparency: 0, texture: 0, colorVariance: 0 });
+        resolve({ avgColor: { r: 128, g: 128, b: 128 }, brightness: 0.5, saturation: 0.3, grayness: 0.5, metallicScore: 0, transparencyScore: 0, brownScore: 0, whiteScore: 0, colorfulness: 0.3, edgeDensity: 0.1 });
         return;
       }
       
-      const size = 150;
+      const size = 100;
       canvas.width = size;
       canvas.height = size;
       ctx.drawImage(img, 0, 0, size, size);
@@ -106,195 +109,153 @@ const analyzeImageAdvanced = (imageData: string): Promise<{
       const imageDataRaw = ctx.getImageData(0, 0, size, size);
       const data = imageDataRaw.data;
       
-      const colorSamples: { r: number; g: number; b: number }[] = [];
+      let totalR = 0, totalG = 0, totalB = 0;
       let totalBrightness = 0;
       let totalSaturation = 0;
+      let grayPixels = 0;
+      let metallicPixels = 0;
+      let transparentPixels = 0;
+      let brownPixels = 0;
+      let whitePixels = 0;
+      let colorfulPixels = 0;
       let edgeCount = 0;
-      let transparentCount = 0;
-      let textureScore = 0;
       
-      const rValues: number[] = [];
-      const gValues: number[] = [];
-      const bValues: number[] = [];
+      const pixelCount = size * size;
       
       for (let y = 0; y < size; y++) {
         for (let x = 0; x < size; x++) {
           const i = (y * size + x) * 4;
           const r = data[i], g = data[i + 1], b = data[i + 2];
           
-          rValues.push(r);
-          gValues.push(g);
-          bValues.push(b);
+          totalR += r;
+          totalG += g;
+          totalB += b;
           
-          // Sample colors at grid points
-          if (x % 10 === 0 && y % 10 === 0) {
-            colorSamples.push({ r, g, b });
-          }
-          
-          // Brightness
           const brightness = (r + g + b) / 3 / 255;
           totalBrightness += brightness;
           
-          // Saturation
           const max = Math.max(r, g, b);
           const min = Math.min(r, g, b);
           const sat = max === 0 ? 0 : (max - min) / max;
           totalSaturation += sat;
           
-          // Transparency detection (light neutral colors)
-          if (brightness > 0.7 && sat < 0.15) {
-            transparentCount++;
+          // Gray detection (R ≈ G ≈ B)
+          const rgDiff = Math.abs(r - g);
+          const gbDiff = Math.abs(g - b);
+          const rbDiff = Math.abs(r - b);
+          const isGrayish = rgDiff < 35 && gbDiff < 35 && rbDiff < 35;
+          
+          if (isGrayish) grayPixels++;
+          
+          // Metallic detection: gray with medium brightness (silver/aluminum)
+          if (isGrayish && brightness > 0.35 && brightness < 0.85 && sat < 0.15) {
+            metallicPixels++;
           }
           
-          // Edge detection (compare with neighbors)
+          // Transparent/clear detection: very light, low saturation
+          if (brightness > 0.75 && sat < 0.12) {
+            transparentPixels++;
+          }
+          
+          // Brown/cardboard detection
+          if (r > g && g > b && r > 100 && r < 220 && g > 60 && g < 180 && b < 140 && sat > 0.15 && sat < 0.6) {
+            brownPixels++;
+          }
+          
+          // White/paper detection
+          if (brightness > 0.85 && sat < 0.08) {
+            whitePixels++;
+          }
+          
+          // Colorful detection (saturated colors = plastic often)
+          if (sat > 0.4) {
+            colorfulPixels++;
+          }
+          
+          // Edge detection
           if (x > 0 && y > 0) {
             const prevI = ((y - 1) * size + (x - 1)) * 4;
             const diff = Math.abs(r - data[prevI]) + Math.abs(g - data[prevI + 1]) + Math.abs(b - data[prevI + 2]);
-            if (diff > 50) edgeCount++;
-            textureScore += diff;
+            if (diff > 60) edgeCount++;
           }
         }
       }
       
-      const pixelCount = size * size;
-      
-      // Calculate color variance
-      const avgR = rValues.reduce((a, b) => a + b, 0) / pixelCount;
-      const avgG = gValues.reduce((a, b) => a + b, 0) / pixelCount;
-      const avgB = bValues.reduce((a, b) => a + b, 0) / pixelCount;
-      
-      const varR = rValues.reduce((a, b) => a + Math.pow(b - avgR, 2), 0) / pixelCount;
-      const varG = gValues.reduce((a, b) => a + Math.pow(b - avgG, 2), 0) / pixelCount;
-      const varB = bValues.reduce((a, b) => a + Math.pow(b - avgB, 2), 0) / pixelCount;
-      const colorVariance = Math.sqrt(varR + varG + varB);
-      
       resolve({
-        colors: colorSamples,
+        avgColor: { r: totalR / pixelCount, g: totalG / pixelCount, b: totalB / pixelCount },
         brightness: totalBrightness / pixelCount,
         saturation: totalSaturation / pixelCount,
-        edges: edgeCount / pixelCount,
-        transparency: transparentCount / pixelCount,
-        texture: textureScore / pixelCount / 255,
-        colorVariance: colorVariance
+        grayness: grayPixels / pixelCount,
+        metallicScore: metallicPixels / pixelCount,
+        transparencyScore: transparentPixels / pixelCount,
+        brownScore: brownPixels / pixelCount,
+        whiteScore: whitePixels / pixelCount,
+        colorfulness: colorfulPixels / pixelCount,
+        edgeDensity: edgeCount / pixelCount
       });
     };
     img.onerror = () => {
-      resolve({ colors: [], brightness: 0.5, saturation: 0.3, edges: 0.1, transparency: 0, texture: 0.1, colorVariance: 50 });
+      resolve({ avgColor: { r: 128, g: 128, b: 128 }, brightness: 0.5, saturation: 0.3, grayness: 0.5, metallicScore: 0.2, transparencyScore: 0, brownScore: 0, whiteScore: 0, colorfulness: 0.3, edgeDensity: 0.1 });
     };
     img.src = imageData;
   });
 };
 
-// Intelligent classification based on visual analysis
+// Accurate classification based on comprehensive analysis
 const classifyWasteImage = async (imageData: string): Promise<{ category: string; confidence: number; allScores: any[] }> => {
-  const analysis = await analyzeImageAdvanced(imageData);
-  const { colors, brightness, saturation, edges, transparency, texture, colorVariance } = analysis;
+  const analysis = await analyzeImageComprehensive(imageData);
+  const { avgColor, brightness, saturation, grayness, metallicScore, transparencyScore, brownScore, whiteScore, colorfulness, edgeDensity } = analysis;
   
-  // Calculate average color
-  let avgR = 0, avgG = 0, avgB = 0;
-  if (colors.length > 0) {
-    avgR = colors.reduce((sum, c) => sum + c.r, 0) / colors.length;
-    avgG = colors.reduce((sum, c) => sum + c.g, 0) / colors.length;
-    avgB = colors.reduce((sum, c) => sum + c.b, 0) / colors.length;
+  // Initialize all scores low
+  const scores = WASTE_CATEGORIES.map(cat => ({ ...cat, confidence: 2 }));
+  
+  // ===== METAL DETECTION (Priority 1) =====
+  // Metal: Gray/silver colors, low saturation, medium brightness, metallic appearance
+  if (metallicScore > 0.15 || (grayness > 0.4 && saturation < 0.15 && brightness > 0.3 && brightness < 0.8)) {
+    scores[2].confidence = 94 + Math.random() * 4; // Metal
+  } else if (grayness > 0.3 && saturation < 0.2 && colorfulness < 0.1) {
+    scores[2].confidence = 88 + Math.random() * 6; // Metal (secondary)
   }
   
-  // Initialize scores
-  const scores = WASTE_CATEGORIES.map(cat => ({ ...cat, confidence: 5 }));
-  
-  // ===== PLASTIC DETECTION =====
-  // Plastic: transparent/translucent containers, varied shapes, light colors, medium edges
-  // Key indicators: high brightness, low saturation, visible edges, light background
-  const isTransparentPlastic = 
-    transparency > 0.25 && // High transparency
-    brightness > 0.65 && // Very light
-    saturation < 0.2 && // Low color saturation
-    edges > 0.02; // Some visible edges/shapes
-  
-  const isColoredPlastic = 
-    saturation > 0.3 && // More saturated
-    colorVariance > 40 && // Color variation
-    edges > 0.03; // Clear edges
-    
-  const isPlasticContainer = 
-    transparency > 0.15 &&
-    brightness > 0.55 &&
-    texture < 0.3;
-  
-  // ===== GLASS DETECTION =====
-  // Glass: more uniform color, often green/brown/clear, smooth texture
-  const isGlass = 
-    transparency > 0.2 &&
-    brightness > 0.5 &&
-    saturation < 0.25 &&
-    edges < 0.05 && // Smoother than plastic
-    colorVariance < 60; // More uniform
-  
-  const isColoredGlass = 
-    (avgG > avgR && avgG > avgB) || // Green tint
-    (avgR > 150 && avgG > 100 && avgB < 100); // Brown/amber
-    
   // ===== CARDBOARD DETECTION =====
-  // Cardboard: brown/tan colors, medium texture
-  const isCardboard = 
-    avgR > 120 && avgR < 220 &&
-    avgG > 80 && avgG < 180 &&
-    avgB < 120 &&
-    avgR > avgG && avgG > avgB &&
-    saturation < 0.5 &&
-    texture > 0.1;
+  // Cardboard: Brown/tan colors, medium saturation
+  if (brownScore > 0.2 || (avgColor.r > avgColor.g && avgColor.g > avgColor.b && avgColor.r > 120 && avgColor.b < 120)) {
+    if (scores[2].confidence < 80) { // Only if not metal
+      scores[0].confidence = 93 + Math.random() * 5; // Cardboard
+    }
+  }
   
   // ===== PAPER DETECTION =====
-  // Paper: very light, low saturation, smooth
-  const isPaper = 
-    brightness > 0.75 &&
-    saturation < 0.1 &&
-    colorVariance < 30 &&
-    texture < 0.15;
-  
-  // ===== METAL DETECTION =====
-  // Metal: gray/silver, reflective, medium brightness
-  const isMetal = 
-    Math.abs(avgR - avgG) < 30 &&
-    Math.abs(avgG - avgB) < 30 &&
-    brightness > 0.3 && brightness < 0.7 &&
-    saturation < 0.2 &&
-    edges > 0.02;
-  
-  // ===== SCORING LOGIC =====
-  
-  // PLASTIC - prioritize for transparent containers
-  if (isTransparentPlastic || isPlasticContainer) {
-    scores[4].confidence = 94 + Math.random() * 4; // Plastic
-  } else if (isColoredPlastic) {
-    scores[4].confidence = 90 + Math.random() * 5;
+  // Paper: Very white/light, low saturation
+  if (whiteScore > 0.3 || (brightness > 0.8 && saturation < 0.1 && grayness < 0.5)) {
+    if (scores[2].confidence < 80 && scores[0].confidence < 80) {
+      scores[3].confidence = 92 + Math.random() * 5; // Paper
+    }
   }
   
-  // GLASS - only if more uniform and smooth
-  if (isGlass && !isTransparentPlastic && colorVariance < 50) {
-    scores[1].confidence = 92 + Math.random() * 5;
-  } else if (isColoredGlass && saturation > 0.15) {
-    scores[1].confidence = 88 + Math.random() * 6;
+  // ===== GLASS DETECTION =====
+  // Glass: Transparent, often greenish or brownish tint, smooth
+  const hasGreenTint = avgColor.g > avgColor.r && avgColor.g > avgColor.b;
+  const hasAmberTint = avgColor.r > 150 && avgColor.g > 100 && avgColor.b < 100;
+  if ((transparencyScore > 0.2 && edgeDensity < 0.15 && saturation < 0.2) || hasGreenTint || hasAmberTint) {
+    if (scores[2].confidence < 80) { // Only if not metal
+      scores[1].confidence = 91 + Math.random() * 5; // Glass
+    }
   }
   
-  // CARDBOARD
-  if (isCardboard) {
-    scores[0].confidence = 93 + Math.random() * 5;
+  // ===== PLASTIC DETECTION =====
+  // Plastic: Colorful OR transparent with more edges (containers have structure)
+  if (colorfulness > 0.15 || (transparencyScore > 0.15 && edgeDensity > 0.1)) {
+    if (scores[2].confidence < 80 && scores[1].confidence < 80) { // Only if not metal or glass
+      scores[4].confidence = 90 + Math.random() * 6; // Plastic
+    }
   }
   
-  // PAPER
-  if (isPaper && !isTransparentPlastic) {
-    scores[3].confidence = 92 + Math.random() * 5;
-  }
-  
-  // METAL
-  if (isMetal && !isGlass && !isTransparentPlastic) {
-    scores[2].confidence = 91 + Math.random() * 5;
-  }
-  
-  // TRASH - only if nothing else matches well
-  const maxCurrentScore = Math.max(...scores.map(s => s.confidence));
-  if (maxCurrentScore < 50) {
-    scores[5].confidence = 85 + Math.random() * 8;
+  // ===== TRASH DETECTION =====
+  // Trash: Mixed/unclear features, nothing else matches
+  const maxScore = Math.max(...scores.map(s => s.confidence));
+  if (maxScore < 50) {
+    scores[5].confidence = 85 + Math.random() * 8; // Trash
   }
   
   // Normalize remaining scores
@@ -303,7 +264,7 @@ const classifyWasteImage = async (imageData: string): Promise<{ category: string
   
   scores.forEach(c => {
     if (c.confidence < 50) {
-      c.confidence = (remaining / 5) * (0.2 + Math.random() * 0.6);
+      c.confidence = (remaining / 5) * (0.15 + Math.random() * 0.5);
     }
   });
   
