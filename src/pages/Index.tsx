@@ -59,7 +59,7 @@ const Index = () => {
           <p className="text-sm text-muted-foreground">
             AI-Driven Predictive Waste Management for Urban Sustainability <span className="text-primary font-semibold">using IoT</span>
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-muted-foreground/80 mt-1">
             Powered by Machine Learning • ESP32 • LoRa/WiFi • Real-time Analytics
           </p>
         </div>
