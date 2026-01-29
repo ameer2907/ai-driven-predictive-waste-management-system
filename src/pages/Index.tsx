@@ -53,13 +53,12 @@ const Index = () => {
         </Tabs>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-border/50 py-6 mt-8">
+      <footer className="border-t border-border/50 py-6 mt-8 bg-card/30">
         <div className="container mx-auto px-4 text-center">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-foreground font-medium">
             AI-Driven Predictive Waste Management for Urban Sustainability <span className="text-primary font-semibold">using IoT</span>
           </p>
-          <p className="text-xs text-muted-foreground/80 mt-1">
+          <p className="text-xs text-muted-foreground mt-1.5">
             Powered by Machine Learning • ESP32 • LoRa/WiFi • Real-time Analytics
           </p>
         </div>
