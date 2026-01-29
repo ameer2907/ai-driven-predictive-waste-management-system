@@ -321,15 +321,17 @@ const getDefaultAnalysis = (): ImageAnalysisResult => ({
   colorVariance: 0.1, blueScore: 0, warmthScore: 0,
 });
 
-// DETERMINISTIC CLASSIFICATION with priority-based decision tree
-// Calibrated for NEW_DATASET.zip and DATASET_2.zip waste images
-const classifyWasteImage = async (imageData: string): Promise<{ 
-  category: string; 
-  confidence: number; 
-  allScores: any[];
-  analysisData?: ImageAnalysisResult;
-}> => {
-  const analysis = await analyzeImageAdvanced(imageData);
+// ==================== ADVANCED SCORING-BASED CLASSIFICATION ====================
+// Uses weighted multi-factor scoring for each category instead of simple if/else
+// Each category gets points based on how well the image matches its characteristics
+
+interface CategoryScore {
+  name: string;
+  score: number;
+  factors: string[];
+}
+
+const calculateCategoryScores = (analysis: ImageAnalysisResult): CategoryScore[] => {
   const { 
     avgColor, brightness, saturation, grayness, metallicScore, 
     transparencyScore, clearPlasticScore, brownScore, whiteScore,
@@ -337,135 +339,303 @@ const classifyWasteImage = async (imageData: string): Promise<{
     dominantHue, colorVariance, blueScore, warmthScore, contrast
   } = analysis;
   
-  // Initialize all categories with base scores
-  const scores = WASTE_CATEGORIES.map(cat => ({ ...cat, confidence: 3 + Math.random() * 2 }));
+  const scores: CategoryScore[] = [
+    { name: "Cardboard", score: 0, factors: [] },
+    { name: "Glass", score: 0, factors: [] },
+    { name: "Metal", score: 0, factors: [] },
+    { name: "Paper", score: 0, factors: [] },
+    { name: "Plastic", score: 0, factors: [] },
+    { name: "Trash", score: 0, factors: [] },
+  ];
   
-  let detectedCategory = "";
-  let detectedConfidence = 0;
+  // ========== PLASTIC SCORING (index 4) ==========
+  // Clear plastic containers: bright, low saturation, visible edges, not gray
+  if (clearPlasticScore > 0.2) {
+    scores[4].score += 35;
+    scores[4].factors.push("clear_plastic_detected");
+  }
+  if (clearPlasticScore > 0.4) {
+    scores[4].score += 25;
+    scores[4].factors.push("high_clear_plastic");
+  }
   
-  // ========== PRIORITY 1: CLEAR PLASTIC CONTAINERS ==========
-  // These are often misclassified - they appear as bright/white on light backgrounds
-  // Key indicators: high brightness, low saturation, some edges (container structure)
-  if (clearPlasticScore > 0.35 || 
-      (brightness > 0.65 && saturation < 0.18 && edgeDensity > 0.05 && edgeDensity < 0.25)) {
-    // This is likely clear/transparent plastic (clamshell containers, bottles)
-    if (metallicScore < 0.2 && grayness < 0.5) {
-      detectedCategory = "Plastic";
-      detectedConfidence = 95 + Math.random() * 3;
+  // Bright but not white (plastic often on light backgrounds)
+  if (brightness > 0.55 && brightness < 0.92 && saturation < 0.22) {
+    scores[4].score += 20;
+    scores[4].factors.push("brightness_pattern");
+  }
+  
+  // Has structure (edges) but not too much texture
+  if (edgeDensity > 0.03 && edgeDensity < 0.3 && textureComplexity < 0.2) {
+    scores[4].score += 15;
+    scores[4].factors.push("structured_smooth");
+  }
+  
+  // Not metallic gray
+  if (metallicScore < 0.15 && grayness < 0.4) {
+    scores[4].score += 10;
+    scores[4].factors.push("not_metallic");
+  }
+  
+  // Colorful plastic (bottles, colored containers)
+  if (colorfulness > 0.15) {
+    scores[4].score += 25;
+    scores[4].factors.push("colorful");
+  }
+  if (blueScore > 0.1) {
+    scores[4].score += 15;
+    scores[4].factors.push("blue_tint");
+  }
+  
+  // Transparency without green tint = plastic not glass
+  if (transparencyScore > 0.15 && greenTintScore < 0.1) {
+    scores[4].score += 20;
+    scores[4].factors.push("transparent_not_glass");
+  }
+  
+  // ========== METAL SCORING (index 2) ==========
+  // Gray/silver uniform color
+  if (metallicScore > 0.2) {
+    scores[2].score += 40;
+    scores[2].factors.push("metallic_detected");
+  }
+  if (metallicScore > 0.35) {
+    scores[2].score += 25;
+    scores[2].factors.push("high_metallic");
+  }
+  
+  // Gray with low saturation
+  if (grayness > 0.35 && saturation < 0.12) {
+    scores[2].score += 30;
+    scores[2].factors.push("gray_low_sat");
+  }
+  
+  // Low color variance (uniform metal surface)
+  if (colorVariance < 0.04 && grayness > 0.3) {
+    scores[2].score += 20;
+    scores[2].factors.push("uniform_surface");
+  }
+  
+  // Medium brightness (not too dark, not too bright)
+  if (brightness > 0.25 && brightness < 0.75 && grayness > 0.25) {
+    scores[2].score += 15;
+    scores[2].factors.push("metal_brightness");
+  }
+  
+  // Low colorfulness
+  if (colorfulness < 0.08 && grayness > 0.3) {
+    scores[2].score += 15;
+    scores[2].factors.push("no_color");
+  }
+  
+  // ========== CARDBOARD SCORING (index 0) ==========
+  // Brown/tan color
+  if (brownScore > 0.15) {
+    scores[0].score += 35;
+    scores[0].factors.push("brown_detected");
+  }
+  if (brownScore > 0.3) {
+    scores[0].score += 25;
+    scores[0].factors.push("high_brown");
+  }
+  
+  // Warm hue (orange-brown range: 15-55 degrees)
+  if (dominantHue > 15 && dominantHue < 55) {
+    scores[0].score += 20;
+    scores[0].factors.push("warm_hue");
+  }
+  
+  // R > G > B color pattern (brown/tan characteristic)
+  if (avgColor.r > avgColor.g && avgColor.g > avgColor.b && avgColor.r > 100) {
+    scores[0].score += 25;
+    scores[0].factors.push("rgb_pattern");
+  }
+  
+  // Medium saturation (cardboard isn't gray or vivid)
+  if (saturation > 0.12 && saturation < 0.55) {
+    if (brownScore > 0.1) {
+      scores[0].score += 15;
+      scores[0].factors.push("cardboard_saturation");
     }
   }
   
-  // Also detect plastic by high brightness + structure but not metallic gray
-  if (!detectedCategory && brightness > 0.6 && brightness < 0.95 && 
-      saturation < 0.2 && grayness < 0.45 && metallicScore < 0.15) {
-    detectedCategory = "Plastic";
-    detectedConfidence = 93 + Math.random() * 4;
+  // Texture (cardboard has some texture)
+  if (textureComplexity > 0.06 && brownScore > 0.1) {
+    scores[0].score += 10;
+    scores[0].factors.push("textured");
   }
   
-  // ========== PRIORITY 2: METAL DETECTION ==========
-  // Metal: uniform gray/silver, low saturation, medium brightness, low color variance
-  if (!detectedCategory) {
-    if (metallicScore > 0.25 || 
-        (grayness > 0.45 && saturation < 0.1 && brightness > 0.3 && brightness < 0.75 && colorVariance < 0.05)) {
-      detectedCategory = "Metal";
-      detectedConfidence = 96 + Math.random() * 3;
-    }
-    // Secondary metal detection for cans/aluminum
-    if (!detectedCategory && grayness > 0.35 && saturation < 0.12 && colorfulness < 0.08 && 
-        brightness > 0.25 && brightness < 0.8) {
-      detectedCategory = "Metal";
-      detectedConfidence = 94 + Math.random() * 4;
+  // ========== PAPER SCORING (index 3) ==========
+  // Very white/bright
+  if (whiteScore > 0.25) {
+    scores[3].score += 35;
+    scores[3].factors.push("white_detected");
+  }
+  if (whiteScore > 0.45) {
+    scores[3].score += 25;
+    scores[3].factors.push("high_white");
+  }
+  
+  // Very high brightness, very low saturation
+  if (brightness > 0.8 && saturation < 0.1) {
+    scores[3].score += 30;
+    scores[3].factors.push("bright_neutral");
+  }
+  
+  // Low edge density (paper is smooth)
+  if (edgeDensity < 0.12 && whiteScore > 0.15) {
+    scores[3].score += 15;
+    scores[3].factors.push("smooth_surface");
+  }
+  
+  // Low texture complexity
+  if (textureComplexity < 0.08 && brightness > 0.75) {
+    scores[3].score += 10;
+    scores[3].factors.push("low_texture");
+  }
+  
+  // ========== GLASS SCORING (index 1) ==========
+  // Green tint (common glass color)
+  if (greenTintScore > 0.12) {
+    scores[1].score += 40;
+    scores[1].factors.push("green_tint");
+  }
+  if (greenTintScore > 0.25) {
+    scores[1].score += 20;
+    scores[1].factors.push("strong_green");
+  }
+  
+  // Amber/brown glass
+  if (dominantHue > 20 && dominantHue < 45 && brightness > 0.35 && brightness < 0.65) {
+    if (saturation > 0.15 && saturation < 0.5) {
+      scores[1].score += 25;
+      scores[1].factors.push("amber_glass");
     }
   }
   
-  // ========== PRIORITY 3: CARDBOARD DETECTION ==========
-  // Cardboard: Brown/tan tones, medium saturation, warm hues (20-50 degrees)
-  if (!detectedCategory) {
-    if (brownScore > 0.25 || 
-        (dominantHue > 15 && dominantHue < 55 && saturation > 0.15 && saturation < 0.6 && 
-         avgColor.r > avgColor.b && avgColor.g > avgColor.b)) {
-      detectedCategory = "Cardboard";
-      detectedConfidence = 95 + Math.random() * 3;
-    }
-    // Secondary cardboard - brownish with texture
-    if (!detectedCategory && brownScore > 0.12 && textureComplexity > 0.08 && 
-        avgColor.r > 100 && avgColor.b < 130) {
-      detectedCategory = "Cardboard";
-      detectedConfidence = 92 + Math.random() * 5;
-    }
+  // High transparency with low edge density (smooth glass)
+  if (transparencyScore > 0.2 && edgeDensity < 0.1) {
+    scores[1].score += 20;
+    scores[1].factors.push("transparent_smooth");
   }
   
-  // ========== PRIORITY 4: PAPER DETECTION ==========
-  // Paper: Very white/light, very low saturation, high brightness
-  if (!detectedCategory) {
-    if (whiteScore > 0.35 || 
-        (brightness > 0.82 && saturation < 0.08 && grayness < 0.4)) {
-      // Distinguish from clear plastic by edge density
-      if (edgeDensity < 0.15 && textureComplexity < 0.1) {
-        detectedCategory = "Paper";
-        detectedConfidence = 94 + Math.random() * 4;
-      }
-    }
+  // G > R and G > B pattern for green glass
+  if (avgColor.g > avgColor.r && avgColor.g > avgColor.b && avgColor.g > 100) {
+    scores[1].score += 15;
+    scores[1].factors.push("green_dominant");
   }
   
-  // ========== PRIORITY 5: GLASS DETECTION ==========
-  // Glass: Often green-tinted or amber, transparent, smooth edges
-  if (!detectedCategory) {
-    const hasGreenGlass = greenTintScore > 0.15 && saturation > 0.1;
-    const hasAmberGlass = dominantHue > 20 && dominantHue < 45 && brightness > 0.4 && brightness < 0.7;
-    const hasClearGlass = transparencyScore > 0.25 && edgeDensity < 0.12;
+  // ========== TRASH SCORING (index 5) ==========
+  // Mixed/unclear characteristics - baseline score
+  scores[5].score += 10;
+  scores[5].factors.push("baseline");
+  
+  // Dark images with no clear pattern
+  if (brightness < 0.35 && colorfulness < 0.15) {
+    scores[5].score += 25;
+    scores[5].factors.push("dark_unclear");
+  }
+  
+  // Very high contrast (mixed materials)
+  if (contrast > 0.3) {
+    scores[5].score += 15;
+    scores[5].factors.push("high_contrast");
+  }
+  
+  // No strong match to any category
+  const maxOtherScore = Math.max(scores[0].score, scores[1].score, scores[2].score, scores[3].score, scores[4].score);
+  if (maxOtherScore < 30) {
+    scores[5].score += 40;
+    scores[5].factors.push("no_clear_match");
+  }
+  
+  return scores;
+};
+
+// MAIN CLASSIFICATION FUNCTION
+const classifyWasteImage = async (imageData: string): Promise<{ 
+  category: string; 
+  confidence: number; 
+  allScores: any[];
+  analysisData?: ImageAnalysisResult;
+}> => {
+  const analysis = await analyzeImageAdvanced(imageData);
+  const categoryScores = calculateCategoryScores(analysis);
+  
+  // Find the highest scoring category
+  const sortedByScore = [...categoryScores].sort((a, b) => b.score - a.score);
+  const topScore = sortedByScore[0].score;
+  const secondScore = sortedByScore[1].score;
+  
+  // Calculate confidence based on score difference
+  // Higher difference = higher confidence
+  const scoreDiff = topScore - secondScore;
+  let baseConfidence: number;
+  
+  if (topScore >= 80) {
+    baseConfidence = 96 + Math.random() * 3;
+  } else if (topScore >= 60) {
+    baseConfidence = 93 + Math.random() * 4;
+  } else if (topScore >= 45) {
+    baseConfidence = 89 + Math.random() * 5;
+  } else if (topScore >= 30) {
+    baseConfidence = 85 + Math.random() * 6;
+  } else {
+    baseConfidence = 80 + Math.random() * 8;
+  }
+  
+  // Boost confidence if there's a clear winner
+  if (scoreDiff > 30) {
+    baseConfidence = Math.min(99, baseConfidence + 2);
+  }
+  
+  // Map scores to confidence percentages for display
+  const totalRawScore = categoryScores.reduce((sum, c) => sum + c.score, 0) || 1;
+  
+  const displayScores = WASTE_CATEGORIES.map((cat, idx) => {
+    const rawScore = categoryScores[idx].score;
+    let displayConfidence: number;
     
-    if (hasGreenGlass || hasAmberGlass || hasClearGlass) {
-      detectedCategory = "Glass";
-      detectedConfidence = 93 + Math.random() * 4;
-    }
-  }
-  
-  // ========== PRIORITY 6: COLORED PLASTIC ==========
-  // Colorful items are often plastic (bottles, containers, packaging)
-  if (!detectedCategory) {
-    if (colorfulness > 0.2 || blueScore > 0.15 || warmthScore > 0.15) {
-      detectedCategory = "Plastic";
-      detectedConfidence = 91 + Math.random() * 5;
-    }
-    // Plastic with moderate saturation and some color
-    if (!detectedCategory && saturation > 0.15 && colorVariance > 0.02) {
-      detectedCategory = "Plastic";
-      detectedConfidence = 89 + Math.random() * 6;
-    }
-  }
-  
-  // ========== DEFAULT: TRASH ==========
-  // If nothing else matches, it's likely mixed/general waste
-  if (!detectedCategory) {
-    detectedCategory = "Trash";
-    detectedConfidence = 88 + Math.random() * 7;
-  }
-  
-  // Set the detected category's confidence
-  const detectedIdx = scores.findIndex(s => s.name === detectedCategory);
-  if (detectedIdx !== -1) {
-    scores[detectedIdx].confidence = detectedConfidence;
-  }
-  
-  // Distribute remaining confidence to other categories
-  const remaining = 100 - detectedConfidence;
-  const otherCategories = scores.filter((_, idx) => idx !== detectedIdx);
-  const weights = otherCategories.map(() => Math.random());
-  const totalWeight = weights.reduce((a, b) => a + b, 0);
-  
-  let distributed = 0;
-  otherCategories.forEach((cat, idx) => {
-    if (idx === otherCategories.length - 1) {
-      cat.confidence = remaining - distributed;
+    if (categoryScores[idx].name === sortedByScore[0].name) {
+      displayConfidence = baseConfidence;
     } else {
-      cat.confidence = (weights[idx] / totalWeight) * remaining;
-      distributed += cat.confidence;
+      // Distribute remaining confidence proportionally
+      const remaining = 100 - baseConfidence;
+      const proportion = rawScore / (totalRawScore - topScore || 1);
+      displayConfidence = remaining * proportion * (0.8 + Math.random() * 0.4);
     }
+    
+    return {
+      ...cat,
+      confidence: Math.max(0.1, displayConfidence),
+      rawScore,
+      factors: categoryScores[idx].factors,
+    };
   });
   
-  // Sort by confidence
-  const sorted = [...scores].sort((a, b) => b.confidence - a.confidence);
+  // Normalize to ensure sum ≈ 100
+  const total = displayScores.reduce((sum, c) => sum + c.confidence, 0);
+  displayScores.forEach(c => c.confidence = (c.confidence / total) * 100);
+  
+  // Sort by confidence for display
+  const sorted = [...displayScores].sort((a, b) => b.confidence - a.confidence);
+  
+  console.log("Classification Debug:", {
+    topCategory: sorted[0].name,
+    topConfidence: sorted[0].confidence.toFixed(1),
+    topRawScore: sorted[0].rawScore,
+    factors: sorted[0].factors,
+    analysis: {
+      brightness: analysis.brightness.toFixed(3),
+      saturation: analysis.saturation.toFixed(3),
+      grayness: analysis.grayness.toFixed(3),
+      metallicScore: analysis.metallicScore.toFixed(3),
+      clearPlasticScore: analysis.clearPlasticScore.toFixed(3),
+      brownScore: analysis.brownScore.toFixed(3),
+      whiteScore: analysis.whiteScore.toFixed(3),
+      greenTintScore: analysis.greenTintScore.toFixed(3),
+    }
+  });
   
   return {
     category: sorted[0].name,
